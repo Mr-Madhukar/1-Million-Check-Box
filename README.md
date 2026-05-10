@@ -1,254 +1,137 @@
 # ☑️ 2000 Checkboxes
 
-A real-time collaborative web app with 2,000 checkboxes. Toggle any checkbox and watch it update instantly for every connected user in the world.
-
-![Demo](https://img.shields.io/badge/demo-live-brightgreen) ![Node.js](https://img.shields.io/badge/node-%3E%3D18-green) ![Redis](https://img.shields.io/badge/redis-7-red)
+A real-time collaborative app — toggle any checkbox and every connected user sees it instantly.
 
 ---
 
-## 📸 Screenshots / Demo
+## Tech Stack
 
-> **[Insert YouTube Unlisted Demo Link Here]**
-> See the demo video for a live walkthrough of the full flow.
-
----
-
-## 🚀 Features
-
-- ✅ **2,000 checkboxes** stored compactly as a Redis bitmap (250 bytes)
-- ⚡ **Real-time sync** via WebSockets – toggle seen by all users instantly
-- 🔐 **OIDC / OAuth 2.0 authentication** – local mock provider (no external services needed)
-- 🚦 **Custom rate limiting** – Redis sliding-window, no external packages
-- 📡 **Redis Pub/Sub** – broadcasts across multiple server instances
-- 📄 **Paged rendering** – 5,000 checkboxes per page (200 pages total)
-- 🎨 **Premium dark UI** – glassmorphism, micro-animations, fully responsive
-
----
-
-## 🏗️ Tech Stack
-
-| Layer | Technology |
+| Layer | Tech |
 |---|---|
-| Frontend | HTML5 + Vanilla CSS + Vanilla JS |
-| Backend | Node.js 18+ + Express 4 |
-| WebSocket | `ws` library |
-| State Store | Redis 7 Bitmap |
-| Pub/Sub | Redis Pub/Sub |
-| Authentication | OIDC / OAuth 2.0 (`oidc-provider`) |
-| Session | `express-session` |
+| Frontend | HTML + Vanilla CSS + Vanilla JS |
+| Backend | Node.js + Express + WebSocket |
+| State / Pub-Sub | Redis 7 |
+| Auth | Custom OIDC Server (TypeScript) |
+| Database | PostgreSQL 17 (user accounts) |
 
 ---
 
-## 🖥️ How to Run Locally
+## Run Locally
 
 ### Prerequisites
-- **Node.js** ≥ 18 ([download](https://nodejs.org))
-- **Docker** (for Redis) – [download](https://www.docker.com/get-started)
+- Node.js ≥ 18
+- Docker Desktop
 
-### Step 1 – Clone & Install
+### 1. Install dependencies
 
 ```bash
-git clone <your-repo-url>
-cd 2000-checkboxes
+# Main app
 npm install
+
+# OIDC auth server
+cd oidc-auth-main && npm install && cd ..
 ```
 
-### Step 2 – Environment Variables
+### 2. Start backing services
 
 ```bash
-cp .env.example .env
-# Edit .env if needed (defaults work out of the box)
+docker compose up -d
 ```
 
-### Step 3 – Start Redis
+This starts **Redis** + **PostgreSQL** in Docker.
+
+### 3. Run DB migrations
 
 ```bash
-docker-compose up -d redis
+cd oidc-auth-main
+npm run db:migrate
+cd ..
 ```
 
-Verify Redis is running:
+### 4. Start the Auth Server
+Open **Terminal 1** and run:
 ```bash
-docker-compose ps
+cd oidc-auth-main
+npm run dev
 ```
+*(Leave this terminal running)*
 
-### Step 4 – Start the App
-
+### 5. Start the Main App
+Open **Terminal 2** and run:
 ```bash
-npm start
+npm run dev
 ```
+*(Leave this terminal running)*
 
-Open http://localhost:8080 in your browser.
+### 6. View the App
+Open **http://localhost:8080** in your browser.
 
 ---
 
-## 🔑 Environment Variables
+## Environment Variables
 
-| Variable | Default | Description |
-|---|---|---|
-| `PORT` | `8080` | HTTP server port |
-| `REDIS_URL` | `redis://localhost:6379` | Redis connection string |
-| `SESSION_SECRET` | *(required)* | Secret for session cookies |
-| `APP_URL` | `http://localhost:8080` | Public URL of the app (used by OIDC issuer) |
-| `CHECKBOX_COUNT` | `2000` | Total number of checkboxes |
+Copy `.env.example` to `.env` and fill in:
 
----
-
-## 🔐 Auth Flow (OIDC / OAuth 2.0)
-
-This app runs a **local mock OIDC provider** using the `oidc-provider` package.  
-No Google account or external service is required.
-
-**Flow:**
-1. User clicks **Sign In** → redirected to `GET /auth/login`
-2. Server generates state + nonce, redirects to `/oidc/auth` (Authorization Code Flow)
-3. Mock OIDC shows a login form at `/oidc-interaction/:uid`
-4. User submits credentials → OIDC provider validates → issues authorization code
-5. Browser redirected to `GET /auth/callback?code=...&state=...`
-6. Server exchanges code for ID token via `POST /oidc/token` (client credentials in Basic Auth header)
-7. ID token decoded → user stored in server-side session cookie
-8. `GET /auth/me` returns current user to frontend
-
-**Demo accounts:**
-
-| Username | Password |
+| Variable | Description |
 |---|---|
-| `alice` | `password123` |
-| `bob` | `password456` |
-
-**Anonymous users** can view checkboxes in read-only mode. Only authenticated users can toggle.
-
----
-
-## 📡 WebSocket Flow
-
-```
-Client                          Server                         Redis
-  │                               │                               │
-  │──── WS Upgrade ──────────────►│                               │
-  │                               │──── GET checkboxes:bits ─────►│
-  │◄─── {type:'init', data:...} ──│◄──── bitmap buffer ───────────│
-  │                               │                               │
-  │──── {type:'toggle', index:42}►│                               │
-  │                               │──── wsRateLimit(userId) ─────►│
-  │                               │◄──── allowed ─────────────────│
-  │                               │──── SETBIT checkboxes:bits 42►│
-  │                               │──── PUBLISH checkbox-updates ─►│
-  │                               │                               │
-  │     (All server instances)    │◄─── message on channel ───────│
-  │◄─── {type:'update', index:42}─│                               │
-```
-
-**Events:**
-- `init` – full bitmap state + metadata sent on connection
-- `toggle` – client sends index; server validates, updates Redis, publishes
-- `update` – broadcast to all clients when a checkbox changes
-- `stats` – periodic count of connected users
-- `error` – rate limit exceeded, auth required, invalid input
-- `ping/pong` – keepalive heartbeat (every 25s)
+| `PORT` | App port (default `8080`) |
+| `REDIS_URL` | Redis connection string |
+| `SESSION_SECRET` | Secret for session cookies |
+| `APP_URL` | Public URL of the app |
+| `OIDC_ISSUER` | URL of the OIDC auth server |
+| `CLIENT_ID` | OIDC client ID |
+| `CLIENT_SECRET` | OIDC client secret |
+| `POSTGRES_USER` | PostgreSQL username |
+| `POSTGRES_PASSWORD` | PostgreSQL password |
 
 ---
 
-## 🚦 Rate Limiting Logic
+## Deploy to Railway
 
-**No external packages used.** Implemented with Redis sliding-window counters.
-
-```
-Key format:  rl:http:{ip}      (HTTP routes)
-             rl:ws:{userId}    (WebSocket events)
-
-Algorithm:
-  1. INCR key
-  2. If count == 1 → EXPIRE key {windowSeconds}  (starts the window)
-  3. If count > limit → reject with 429 / WS error
-  4. Window resets automatically when TTL expires
-```
-
-**Limits:**
-| Type | Limit | Window |
-|---|---|---|
-| HTTP requests | 30 | 10 seconds |
-| WS toggle events | 10 | 5 seconds |
-
----
-
-## 📦 Redis Setup
-
-**Storing 2K checkboxes:**
-- Key: `checkboxes:bits` (Redis Bitmap / String)
-- `SETBIT checkboxes:bits <index> <0|1>` – toggle one bit
-- `GETBIT checkboxes:bits <index>` – read one bit
-- `GET checkboxes:bits` – read entire bitmap as binary buffer
-- `BITCOUNT checkboxes:bits` – count all checked checkboxes
-- **Size:** 2,000 bits = **250 bytes** in Redis
-
-**Pub/Sub:**
-- Channel: `checkbox-updates`
-- Publisher: server instance that receives the WS toggle event
-- Subscriber: all server instances → broadcast to their own WS clients
-
-**Rate limiting keys:**
-- `rl:http:{ip}` – per-IP HTTP counter, TTL 10s
-- `rl:ws:{userId}` – per-user WS counter, TTL 5s
-
-**Verify state in Redis:**
 ```bash
-# Check if checkbox #0 is checked
-redis-cli GETBIT checkboxes:bits 0
-
-# Count total checked checkboxes
-redis-cli BITCOUNT checkboxes:bits
-
-# Monitor pub/sub messages live
-redis-cli SUBSCRIBE checkbox-updates
+git add .
+git commit -m "deploy"
+git push origin main
 ```
+
+1. Go to [railway.com](https://railway.com) → **New Project** → **Deploy from GitHub**
+2. Select this repo — Railway detects `docker-compose.yml` automatically
+3. Add environment variables in the Railway dashboard
+4. Click **Deploy** — live in ~3 minutes at `*.up.railway.app`
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```
-2000-checkboxes/
-├── server.js            ← Main Express + WS server
+├── server.js            ← Express + WebSocket server
 ├── index.html           ← Frontend SPA
-├── style.css            ← Full stylesheet (premium dark UI)
-├── script.js            ← Frontend logic (paging, bitmap, WS, auth)
-├── package.json
-├── docker-compose.yml   ← Redis via Docker
-├── .env.example         ← Environment variables template
-├── Dockerfile           ← App container
-├── README.md
-└── src/
-    ├── auth.js          ← Mock OIDC provider + auth routes
-    ├── rateLimiter.js   ← Custom Redis rate limiter
-    ├── redisClient.js   ← Redis connections (primary + pub/sub)
-    ├── checkboxStore.js ← Bitmap read/write helpers
-    └── wsHandler.js     ← WebSocket event logic
+├── script.js            ← Frontend logic
+├── style.css            ← Styles
+├── docker-compose.yml   ← All 4 services (Redis, Postgres, OIDC, App)
+├── Dockerfile           ← Main app container
+├── railway.toml         ← Railway deploy config
+├── src/
+│   ├── auth.js          ← OIDC client + auth routes
+│   ├── wsHandler.js     ← WebSocket events
+│   ├── rateLimiter.js   ← Redis sliding-window rate limiter
+│   ├── checkboxStore.js ← Redis bitmap helpers
+│   └── redisClient.js   ← Redis connections
+└── oidc-auth-main/      ← OIDC auth server (TypeScript)
+    ├── src/index.ts     ← Auth server entry point
+    ├── drizzle/         ← DB migrations
+    └── Dockerfile       ← Auth server container
 ```
 
 ---
 
-## 🐳 Docker
+## Auth
 
-The included `Dockerfile` packages the app. With docker-compose:
-
-```bash
-# Start everything (Redis + App)
-docker-compose up
-
-# Just Redis
-docker-compose up -d redis
-```
+Sign up with any email and password at the login screen.  
+Anonymous users can **view** checkboxes. Only signed-in users can **toggle** them.
 
 ---
 
-## 🤔 Design Decisions
+## License
 
-| Question | Answer |
-|---|---|
-| How are 2K checkboxes stored? | Redis Bitmap – 250 bytes, O(1) per toggle |
-| How do updates reach other users? | Redis Pub/Sub → all server instances broadcast to their WS clients |
-| What if multiple users toggle the same checkbox simultaneously? | Redis GETBIT+SETBIT is atomic per operation; last write wins |
-| How does rate limiting work? | Redis INCR + EXPIRE sliding window, no external package |
-| How does auth work for WebSockets? | HTTP session cookie shared between HTTP and WS (via upgrade handler) |
-| What do anonymous users see? | Full grid in read-only mode; toggle attempts show a sign-in prompt |
-| What happens on page refresh? | Redis state persists; WS sends fresh bitmap on reconnect |
+ISC
