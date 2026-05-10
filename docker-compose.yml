@@ -1,0 +1,76 @@
+version: '3.9'
+
+services:
+  # ── PostgreSQL (for OIDC auth user store) ─────────────────────────────────
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-oidc_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      POSTGRES_DB: oidc_auth
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-oidc_admin}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ── Redis (checkbox state, Pub/Sub, rate limiting) ─────────────────────────
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: >
+      redis-server --appendonly yes
+      ${REDIS_PASSWORD:+--requirepass $REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # ── OIDC Auth Server (TypeScript, port 8000) ───────────────────────────────
+  oidc-auth:
+    build:
+      context: ./oidc-auth-main
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      PORT: 8000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-oidc_admin}:${POSTGRES_PASSWORD:-changeme}@postgres:5432/oidc_auth
+      OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-http://localhost:8000}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    expose:
+      - "8000"
+
+  # ── Main App (Node.js + WebSocket, port 8080) ─────────────────────────────
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8080}:8080"
+    environment:
+      PORT: 8080
+      REDIS_URL: redis://${REDIS_PASSWORD:+:$REDIS_PASSWORD@}redis:6379
+      SESSION_SECRET: ${SESSION_SECRET:-dev-secret-change-me}
+      APP_URL: ${APP_URL:-http://localhost:8080}
+      CHECKBOX_COUNT: ${CHECKBOX_COUNT:-2000}
+      OIDC_ISSUER: http://oidc-auth:8000
+      CLIENT_ID: ${CLIENT_ID:-checkboxes-app}
+      CLIENT_SECRET: ${CLIENT_SECRET:-checkboxes-secret}
+    depends_on:
+      redis:
+        condition: service_healthy
+      oidc-auth:
+        condition: service_started
+
+volumes:
+  pgdata:
+  redis_data:

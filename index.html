@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Real-time collaborative checkbox grid with 2,000 checkboxes. Toggle checkboxes and watch changes sync live across all users.">
+  <title>2,000 Checkboxes – Real-Time Collaborative Grid</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>☑️</text></svg>">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- Loading Overlay -->
+<div id="loading-overlay" aria-live="polite">
+  <div class="spinner"></div>
+  <p>Connecting to server…</p>
+</div>
+
+<!-- Navbar -->
+<nav id="navbar" role="navigation" aria-label="Main navigation">
+  <div class="nav-brand">
+    <span class="logo-icon">☑️</span>
+    <div>
+      <div>2,000 Checkboxes</div>
+      <div class="logo-sub">Real-time collaborative grid</div>
+    </div>
+  </div>
+
+  <div class="nav-stats" aria-label="Live statistics">
+    <div class="stat-pill" title="WebSocket connection status">
+      <div class="dot" id="conn-dot"></div>
+      <span id="stat-connected">0</span> online
+    </div>
+    <div class="stat-pill" title="Total checked checkboxes">
+      <div class="dot blue"></div>
+      <span id="stat-checked">0</span> checked
+    </div>
+  </div>
+
+  <div class="nav-user" id="nav-user-section" aria-label="User account">
+    <!-- Populated by JS -->
+  </div>
+</nav>
+
+<!-- Anonymous read-only banner -->
+<div id="anon-banner" role="alert">
+  <span>👀 You are viewing in read-only mode.</span>
+  <a href="/auth/login" id="banner-login-link">Sign in</a>
+  <span>to toggle checkboxes.</span>
+</div>
+
+<!-- Hero Section -->
+<header id="hero">
+  <h1>2,000 Checkboxes</h1>
+  <p>Toggle any checkbox — changes sync instantly for everyone, everywhere.</p>
+</header>
+
+<!-- Controls -->
+<div id="controls" role="toolbar" aria-label="Grid controls">
+  <div id="search-wrap">
+    <span class="icon" aria-hidden="true">#</span>
+    <input
+      type="number"
+      id="search-input"
+      placeholder="Jump to #…"
+      min="1"
+      max="2000"
+      aria-label="Jump to checkbox number"
+    >
+  </div>
+  <button class="ctrl-btn" id="btn-jump" aria-label="Jump to checkbox">Go</button>
+  <button class="ctrl-btn" id="btn-prev-page" aria-label="Previous page">← Prev</button>
+  <button class="ctrl-btn" id="btn-next-page" aria-label="Next page">Next →</button>
+</div>
+
+<!-- Grid -->
+<main id="grid-container" role="main">
+  <div id="grid-info" aria-live="polite">
+    <span>Showing checkboxes <span class="range-label" id="range-label">#1 – #5000</span></span>
+    <span id="page-display"></span>
+  </div>
+  <div
+    id="checkbox-grid"
+    class="loading"
+    role="group"
+    aria-label="Checkbox grid"
+  ></div>
+  <div id="pagination" role="navigation" aria-label="Page navigation"></div>
+</main>
+
+<footer>
+  Built with Node.js · Express · WebSockets · Redis · OIDC &nbsp;|&nbsp; Real-time updates via Redis Pub/Sub
+</footer>
+
+<!-- WS Status Indicator -->
+<div id="ws-status" role="status" aria-live="polite">
+  <div class="dot"></div>
+  <span id="ws-status-text">Disconnected</span>
+</div>
+
+<!-- Toast Container -->
+<div id="toast-container" aria-live="assertive" aria-atomic="true"></div>
+
+<script src="script.js"></script>
+</body>
+</html>
